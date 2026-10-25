@@ -1,0 +1,65 @@
+name: Build NovaClient
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Find Project Directory and Build
+        run: |
+          # build.gradle dosyasını projenin içinde nerede olursa olsun arayıp bulur
+          BUILD_FILE=$(find . -name "build.gradle" -not -path "*/.*/*" | head -n 1)
+          
+          if [ -z "$BUILD_FILE" ]; then
+            echo "Error: build.gradle could not be found anywhere in the repository!"
+            exit 1
+          fi
+          
+          # build.gradle dosyasının bulunduğu klasörü tespit edip o dizine girer
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
+          echo "Found project directory: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          
+          # Gradle ile derleme yapar
+          gradle build --no-daemon
+
+      - name: Prepare NovaClient.jar
+        shell: bash
+        run: |
+          mkdir -p release
+          # Oluşan jar dosyasını nerede olursa olsun bulup kopyalar
+          JAR=$(find . -name "*.jar" -not -path "*/build/libs/*-sources.jar" -not -path "*/build/libs/*-dev.jar" -not -path "*/.gradle/*" | grep "build/libs" | head -n 1)
+
+          if [ -z "$JAR" ]; then
+            echo "Error: No mod JAR was generated."
+            exit 1
+          fi
+
+          cp "$JAR" release/NovaClient.jar
+          echo "Successfully found and copied: $JAR to release/NovaClient.jar"
+
+      - name: Upload NovaClient.jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaClient
+          path: release/NovaClient.jar
+          if-no-files-found: error
+          
